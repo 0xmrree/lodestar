@@ -1,7 +1,17 @@
 import mitt, {Emitter as MittEmitter} from "mitt";
 import {PeerId} from "@libp2p/interface";
+import {Libp2p} from "libp2p";
 import {BeaconConfig} from "@lodestar/config";
-import {ForkName} from "@lodestar/params";
+import {ForkName, isForkPostAltair} from "@lodestar/params";
+import {ReqResp, Encoding, ResponseIncoming} from "@lodestar/reqresp";
+import {
+  LightClientBootstrap as LightClientBootstrapProtocol,
+  LightClientUpdatesByRange as LightClientUpdatesByRangeProtocol,
+  LightClientFinalityUpdate as LightClientFinalityUpdateProtocol,
+  LightClientOptimisticUpdate as LightClientOptimisticUpdateProtocol,
+  ReqRespMethod,
+  Version,
+} from "@lodestar/reqresp/protocols";
 import {
   LightClientBootstrap,
   LightClientFinalityUpdate,
@@ -13,12 +23,6 @@ import {
 } from "@lodestar/types";
 import {Logger, fromHex} from "@lodestar/utils";
 import {LightClientTransport} from "./interface.js";
-
-// These imports assume a future network directory in light-client
-// that will contain the necessary P2P infrastructure
-import type {Libp2p} from "../network/interface.js";
-import type {ReqResp, ReqRespMethod} from "../network/reqresp/index.js";
-import type {Eth2Gossipsub, GossipType, GossipTopic} from "../network/gossip/index.js";
 
 /**
  * Events emitted by the P2P transport
@@ -43,8 +47,6 @@ export type LightClientP2PTransportModules = {
   config: BeaconConfig;
   logger: Logger;
   libp2p: Libp2p;
-  reqResp: ReqResp;
-  gossip: Eth2Gossipsub;
 };
 
 /**
@@ -52,7 +54,7 @@ export type LightClientP2PTransportModules = {
  *
  * Instead of connecting to a single beacon node REST API, this transport:
  * 1. Uses req/resp protocols to fetch bootstrap, updates, finality, and optimistic data from peers
- * 2. Subscribes to gossipsub topics to receive live finality and optimistic updates
+ * 2. Can subscribe to gossipsub topics to receive live finality and optimistic updates (future)
  *
  * This provides censorship resistance by not depending on a single trusted node.
  */
@@ -61,17 +63,64 @@ export class LightClientP2PTransport implements LightClientTransport {
   private readonly logger: Logger;
   private readonly libp2p: Libp2p;
   private readonly reqResp: ReqResp;
-  private readonly gossip: Eth2Gossipsub;
   private readonly eventEmitter: LightClientP2PEmitter = mitt();
-  private subscribedToGossip = false;
 
-  constructor(modules: LightClientP2PTransportModules, _opts: LightClientP2PTransportOpts = {}) {
+  constructor(modules: LightClientP2PTransportModules, opts: LightClientP2PTransportOpts = {}) {
     this.config = modules.config;
     this.logger = modules.logger;
     this.libp2p = modules.libp2p;
-    this.reqResp = modules.reqResp;
-    this.gossip = modules.gossip;
-    // TODO: Use opts for retry logic and request timeouts
+
+    // Create ReqResp instance for sending light client requests
+    this.reqResp = new ReqResp(
+      {
+        libp2p: modules.libp2p,
+        logger: modules.logger,
+        metricsRegister: null,
+      },
+      {
+        requestTimeoutMs: opts.requestTimeoutMs,
+      }
+    );
+
+    // Register light client protocols as dial-only (we only send requests, not handle them)
+    this.registerLightClientProtocols();
+  }
+
+  /**
+   * Register the light client req/resp protocols.
+   * We use dial-only registration since light clients only send requests.
+   * The protocol functions return the full protocol definition, but we need to
+   * strip inboundRateLimits for dial-only registration.
+   */
+  private registerLightClientProtocols(): void {
+    // For light client protocols, we start with altair as the minimum
+    const fork = ForkName.altair;
+
+    // Helper to convert ProtocolNoHandler to DialOnlyProtocol by stripping inboundRateLimits
+    const toDialOnly = (protocol: ReturnType<typeof LightClientBootstrapProtocol>) => {
+      const {inboundRateLimits: _, ...dialOnly} = protocol;
+      return dialOnly;
+    };
+
+    // Register all light client protocols
+    this.reqResp.registerDialOnlyProtocol(toDialOnly(LightClientBootstrapProtocol(fork, this.config)));
+    this.reqResp.registerDialOnlyProtocol(toDialOnly(LightClientUpdatesByRangeProtocol(fork, this.config)));
+    this.reqResp.registerDialOnlyProtocol(toDialOnly(LightClientFinalityUpdateProtocol(fork, this.config)));
+    this.reqResp.registerDialOnlyProtocol(toDialOnly(LightClientOptimisticUpdateProtocol(fork, this.config)));
+  }
+
+  /**
+   * Start the P2P transport.
+   */
+  async start(): Promise<void> {
+    await this.reqResp.start();
+  }
+
+  /**
+   * Stop the P2P transport.
+   */
+  async stop(): Promise<void> {
+    await this.reqResp.stop();
   }
 
   /**
@@ -82,10 +131,14 @@ export class LightClientP2PTransport implements LightClientTransport {
     const root = fromHex(blockRoot);
     const peer = await this.getConnectedPeer();
 
-    const responses = await this.sendReqResp(
-      peer,
-      "LightClientBootstrap" as ReqRespMethod,
-      ssz.Root.serialize(root)
+    const responses = await this.collectResponses(
+      this.reqResp.sendRequest(
+        peer,
+        ReqRespMethod.LightClientBootstrap,
+        [Version.V1],
+        Encoding.SSZ_SNAPPY,
+        ssz.Root.serialize(root)
+      )
     );
 
     if (responses.length === 0) {
@@ -108,10 +161,14 @@ export class LightClientP2PTransport implements LightClientTransport {
     const peer = await this.getConnectedPeer();
 
     const requestBody: altair.LightClientUpdatesByRange = {startPeriod, count};
-    const responses = await this.sendReqResp(
-      peer,
-      "LightClientUpdatesByRange" as ReqRespMethod,
-      ssz.altair.LightClientUpdatesByRange.serialize(requestBody)
+    const responses = await this.collectResponses(
+      this.reqResp.sendRequest(
+        peer,
+        ReqRespMethod.LightClientUpdatesByRange,
+        [Version.V1],
+        Encoding.SSZ_SNAPPY,
+        ssz.altair.LightClientUpdatesByRange.serialize(requestBody)
+      )
     );
 
     return responses.map(({fork, data}) => {
@@ -128,10 +185,14 @@ export class LightClientP2PTransport implements LightClientTransport {
     const peer = await this.getConnectedPeer();
 
     // Empty request body for optimistic update
-    const responses = await this.sendReqResp(
-      peer,
-      "LightClientOptimisticUpdate" as ReqRespMethod,
-      new Uint8Array()
+    const responses = await this.collectResponses(
+      this.reqResp.sendRequest(
+        peer,
+        ReqRespMethod.LightClientOptimisticUpdate,
+        [Version.V1],
+        Encoding.SSZ_SNAPPY,
+        new Uint8Array()
+      )
     );
 
     if (responses.length === 0) {
@@ -151,10 +212,14 @@ export class LightClientP2PTransport implements LightClientTransport {
     const peer = await this.getConnectedPeer();
 
     // Empty request body for finality update
-    const responses = await this.sendReqResp(
-      peer,
-      "LightClientFinalityUpdate" as ReqRespMethod,
-      new Uint8Array()
+    const responses = await this.collectResponses(
+      this.reqResp.sendRequest(
+        peer,
+        ReqRespMethod.LightClientFinalityUpdate,
+        [Version.V1],
+        Encoding.SSZ_SNAPPY,
+        new Uint8Array()
+      )
     );
 
     if (responses.length === 0) {
@@ -168,18 +233,20 @@ export class LightClientP2PTransport implements LightClientTransport {
 
   /**
    * Register handler for live optimistic updates via gossipsub.
+   * TODO: Implement gossipsub support for light client
    */
   onOptimisticUpdate(handler: (optimisticUpdate: LightClientOptimisticUpdate) => void): void {
-    this.ensureGossipSubscribed();
     this.eventEmitter.on("onOptimisticUpdate", handler);
+    // TODO: Subscribe to gossipsub topic when gossip support is added
   }
 
   /**
    * Register handler for live finality updates via gossipsub.
+   * TODO: Implement gossipsub support for light client
    */
   onFinalityUpdate(handler: (finalityUpdate: LightClientFinalityUpdate) => void): void {
-    this.ensureGossipSubscribed();
     this.eventEmitter.on("onFinalityUpdate", handler);
+    // TODO: Subscribe to gossipsub topic when gossip support is added
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -204,36 +271,20 @@ export class LightClientP2PTransport implements LightClientTransport {
   }
 
   /**
-   * Send a req/resp request and collect responses.
-   * Returns raw response data with fork info for caller to deserialize.
+   * Collect all responses from an async iterable.
+   * ResponseIncoming already has the fork decoded from context bytes.
    */
-  private async sendReqResp(
-    peer: PeerId,
-    method: ReqRespMethod,
-    requestData: Uint8Array
+  private async collectResponses(
+    responses: AsyncIterable<ResponseIncoming>
   ): Promise<{fork: ForkName; data: Uint8Array}[]> {
-    const responses: {fork: ForkName; data: Uint8Array}[] = [];
+    const result: {fork: ForkName; data: Uint8Array}[] = [];
 
-    for await (const response of this.reqResp.sendRequest(peer, method, requestData)) {
-      // The contextBytes contain the fork digest, which we decode to get the fork name
-      const fork = this.forkDigestToForkName(response.contextBytes);
-      responses.push({fork, data: response.data});
+    for await (const response of responses) {
+      // ResponseIncoming already has fork decoded from context bytes
+      result.push({fork: response.fork, data: response.data});
     }
 
-    return responses;
-  }
-
-  /**
-   * Convert fork digest bytes to fork name using config.
-   * BeaconConfig has genesisValidatorsRoot baked in, so forkDigest2ForkBoundary
-   * can decode the fork digest directly.
-   */
-  private forkDigestToForkName(forkDigest: Uint8Array): ForkName {
-    // The fork digest is computed as:
-    // fork_digest = compute_fork_digest(fork_version, genesis_validators_root)
-    // BeaconConfig already knows the genesisValidatorsRoot, so we can decode directly
-    const boundary = this.config.forkDigest2ForkBoundary(forkDigest);
-    return boundary.fork;
+    return result;
   }
 
   /**
@@ -246,59 +297,13 @@ export class LightClientP2PTransport implements LightClientTransport {
   ): {deserialize: (data: Uint8Array) => unknown} {
     // Light client types are available from altair onwards
     // Each fork may have different types (e.g., capella adds execution payload header)
-    const forkSsz = ssz[fork as keyof typeof ssz];
-
-    if (!forkSsz || !(typeName in forkSsz)) {
+    if (!isForkPostAltair(fork)) {
       // Fallback to altair types for pre-altair forks (shouldn't happen in practice)
-      return ssz.altair[typeName as keyof typeof ssz.altair] as {deserialize: (data: Uint8Array) => unknown};
+      return ssz.altair[typeName];
     }
 
+    // Access fork-specific SSZ types
+    const forkSsz = ssz[fork];
     return forkSsz[typeName as keyof typeof forkSsz] as {deserialize: (data: Uint8Array) => unknown};
-  }
-
-  /**
-   * Subscribe to gossip topics for light client updates.
-   * Only subscribes once, subsequent calls are no-ops.
-   */
-  private ensureGossipSubscribed(): void {
-    if (this.subscribedToGossip) {
-      return;
-    }
-
-    this.logger.info("Subscribing to light client gossip topics");
-
-    // Subscribe to light client gossip topics
-    // The gossip module handles topic string formatting with fork digest
-    this.gossip.subscribeTopic("light_client_optimistic_update" as GossipType);
-    this.gossip.subscribeTopic("light_client_finality_update" as GossipType);
-
-    // Handle incoming gossip messages
-    this.gossip.handleTopic(
-      "light_client_optimistic_update" as GossipType,
-      (data: Uint8Array, topic: GossipTopic) => {
-        try {
-          const sszType = this.getLightClientSszType(topic.fork, "LightClientOptimisticUpdate");
-          const update = sszType.deserialize(data) as LightClientOptimisticUpdate;
-          this.eventEmitter.emit("onOptimisticUpdate", update);
-        } catch (e) {
-          this.logger.error("Failed to decode optimistic update from gossip", {}, e as Error);
-        }
-      }
-    );
-
-    this.gossip.handleTopic(
-      "light_client_finality_update" as GossipType,
-      (data: Uint8Array, topic: GossipTopic) => {
-        try {
-          const sszType = this.getLightClientSszType(topic.fork, "LightClientFinalityUpdate");
-          const update = sszType.deserialize(data) as LightClientFinalityUpdate;
-          this.eventEmitter.emit("onFinalityUpdate", update);
-        } catch (e) {
-          this.logger.error("Failed to decode finality update from gossip", {}, e as Error);
-        }
-      }
-    );
-
-    this.subscribedToGossip = true;
   }
 }

@@ -1,21 +1,25 @@
+import {noise} from "@chainsafe/libp2p-noise";
+import {mplex} from "@libp2p/mplex";
+import {tcp} from "@libp2p/tcp";
+import {bootstrap} from "@libp2p/bootstrap";
+import {createLibp2p, Libp2p} from "libp2p";
 import {ApiClient} from "@lodestar/api";
 import {BeaconConfig} from "@lodestar/config";
 import {Logger} from "@lodestar/utils";
 import {LightClientTransport} from "./interface.js";
 import {LightClientRestTransport} from "./rest.js";
 import {LightClientP2PTransport, LightClientP2PTransportOpts} from "./p2p.js";
-import {createLightClientNetworkComponents, LightClientNetworkOpts} from "../network/index.js";
 
 /**
- * Options for creating a light client transport.
+ * Options for P2P network.
  */
-export type LightClientTransportOpts = {
-  /**
-   * Enable P2P transport instead of REST.
-   * When true, the light client will connect to the Ethereum P2P network directly.
-   * When false (default), it will connect to a beacon node REST API.
-   */
-  enableP2P?: boolean;
+export type LightClientNetworkOpts = {
+  /** Bootstrap node multiaddrs to connect to */
+  bootnodes: string[];
+  /** Local multiaddrs to listen on */
+  localMultiaddrs?: string[];
+  /** Maximum number of peers */
+  maxPeers?: number;
 };
 
 /**
@@ -52,36 +56,62 @@ export type TransportResult = {
 };
 
 /**
+ * Create a libp2p instance for light client networking.
+ */
+async function createLightClientLibp2p(opts: LightClientNetworkOpts, logger: Logger): Promise<Libp2p> {
+  const {bootnodes, localMultiaddrs = ["/ip4/0.0.0.0/tcp/0"], maxPeers = 50} = opts;
+
+  logger.debug("Creating light client libp2p", {
+    localMultiaddrs: localMultiaddrs.join(", "),
+    bootnodes: bootnodes.length,
+    maxPeers,
+  });
+
+  const libp2p = await createLibp2p({
+    addresses: {
+      listen: localMultiaddrs,
+    },
+    transports: [tcp()],
+    connectionEncrypters: [noise()],
+    streamMuxers: [mplex()],
+    peerDiscovery: bootnodes.length > 0 ? [bootstrap({list: bootnodes})] : [],
+    connectionManager: {
+      maxConnections: maxPeers,
+    },
+  });
+
+  return libp2p;
+}
+
+/**
  * Factory function to create a light client transport.
- *
  */
 export async function createLightClientTransport(modules: TransportModules): Promise<TransportResult> {
   if (modules.enableP2P) {
     // P2P transport - need to initialize networking stack
     const {config, logger, networkOpts, transportOpts} = modules;
 
-    // Create libp2p, reqresp, gossip components
-    const networkComponents = await createLightClientNetworkComponents({
-      config,
-      logger,
-      ...networkOpts,
-    });
+    // Create libp2p
+    const libp2p = await createLightClientLibp2p(networkOpts, logger);
+    await libp2p.start();
 
     const transport = new LightClientP2PTransport(
       {
         config,
         logger,
-        libp2p: networkComponents.libp2p,
-        reqResp: networkComponents.reqResp,
-        gossip: networkComponents.gossip,
+        libp2p,
       },
       transportOpts
     );
 
+    // Start the transport (initializes reqresp)
+    await transport.start();
+
     return {
       transport,
       close: async () => {
-        await networkComponents.close();
+        await transport.stop();
+        await libp2p.stop();
       },
     };
   } else {

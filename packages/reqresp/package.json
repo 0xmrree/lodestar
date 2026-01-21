@@ -19,6 +19,11 @@
       "types": "./lib/index.d.ts",
       "import": "./lib/index.js"
     },
+    "./protocols": {
+      "bun": "./src/protocols/index.ts",
+      "types": "./lib/protocols/index.d.ts",
+      "import": "./lib/protocols/index.js"
+    },
     "./utils": {
       "bun": "./src/utils/index.ts",
       "types": "./lib/utils/index.d.ts",
@@ -45,9 +50,11 @@
   },
   "dependencies": {
     "@chainsafe/fast-crc32c": "^4.2.0",
+    "@chainsafe/ssz": "^1.2.2",
     "@libp2p/interface": "^2.7.0",
     "@lodestar/config": "^1.38.0",
     "@lodestar/params": "^1.38.0",
+    "@lodestar/types": "^1.38.0",
     "@lodestar/utils": "^1.38.0",
     "it-all": "^3.0.4",
     "it-pipe": "^3.0.1",
@@ -58,7 +65,6 @@
   },
   "devDependencies": {
     "@lodestar/logger": "^1.38.0",
-    "@lodestar/types": "^1.38.0",
     "libp2p": "2.9.0"
   },
   "peerDependencies": {
