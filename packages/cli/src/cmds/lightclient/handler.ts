@@ -51,35 +51,31 @@ export async function lightclientHandler(args: ILightClientArgs & GlobalArgs): P
     parseLoggerArgs(args, {defaultLogFilepath: path.join(globalPaths.dataDir, "lightclient.log")}, config)
   );
 
-  // Create transport based on enableP2P flag (defaults to true)
-  let transportResult;
+  // Prepare transport options based on enableP2P flag
   let genesisTime: number;
   let genesisValidatorsRoot: Uint8Array;
+  let transportOpts;
 
   if (args.enableP2P) {
-    // P2P mode - connect directly to the Ethereum P2P network
     if (!args.bootnodes || args.bootnodes.length === 0) {
       throw new Error("--bootnodes is required when using P2P mode");
     }
 
-    // For P2P mode, genesis data comes from the network config
-    // TODO: For now we use hardcoded values per network, could also fetch from checkpoint sync
     const genesisData = getGenesisDataFromNetwork(network);
     genesisTime = genesisData.genesisTime;
     genesisValidatorsRoot = genesisData.genesisValidatorsRoot;
 
-    transportResult = await createLightClientTransport({
-      enableP2P: true,
+    transportOpts = {
+      enableP2P: true as const,
       config,
       logger,
       networkOpts: {
         bootnodes: args.bootnodes,
       },
-    });
+    };
 
     logger.info("Using P2P transport", {bootnodes: args.bootnodes.length});
   } else {
-    // REST mode - connect to a beacon node API
     if (!args.beaconApiUrl) {
       throw new Error("--beaconApiUrl is required when --enableP2P=false");
     }
@@ -89,15 +85,15 @@ export async function lightclientHandler(args: ILightClientArgs & GlobalArgs): P
     genesisTime = genesisResponse.genesisTime;
     genesisValidatorsRoot = genesisResponse.genesisValidatorsRoot;
 
-    transportResult = await createLightClientTransport({
-      enableP2P: false,
+    transportOpts = {
+      enableP2P: false as const,
       api,
-    });
+    };
 
     logger.info("Using REST transport", {beaconApiUrl: args.beaconApiUrl});
   }
 
-  const {transport, close} = transportResult;
+  const {transport, close} = await createLightClientTransport(transportOpts);
 
   const client = await Lightclient.initializeFromCheckpointRoot({
     config,
