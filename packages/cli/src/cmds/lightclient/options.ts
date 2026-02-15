@@ -4,6 +4,7 @@ import {LogArgs, logOptions} from "../../options/logOptions.js";
 export type ILightClientArgs = LogArgs & {
   beaconApiUrl: string;
   checkpointRoot: string;
+  p2p?: boolean;
 };
 
 export const lightclientOptions: CliCommandOptions<ILightClientArgs> = {
@@ -17,5 +18,9 @@ export const lightclientOptions: CliCommandOptions<ILightClientArgs> = {
     description: "Checkpoint root hex string to sync the lightclient from, start with 0x",
     type: "string",
     demandOption: true,
+  },
+  p2p: {
+    description: "Enable P2P networking",
+    type: "boolean",
   },
 };
