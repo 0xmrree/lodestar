@@ -724,6 +724,9 @@ importers:
       '@lodestar/params':
         specifier: workspace:^
         version: link:../params
+      '@lodestar/state-transition':
+        specifier: workspace:^
+        version: link:../state-transition
       '@lodestar/types':
         specifier: workspace:^
         version: link:../types
@@ -733,6 +736,9 @@ importers:
       mitt:
         specifier: ^3.0.0
         version: 3.0.0
+      strict-event-emitter-types:
+        specifier: ^2.0.0
+        version: 2.0.0
     devDependencies:
       '@chainsafe/as-sha256':
         specifier: ^1.2.0
@@ -740,9 +746,6 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.1
         version: 10.0.1
-      '@lodestar/state-transition':
-        specifier: workspace:^
-        version: link:../state-transition
       '@types/qs':
         specifier: ^6.9.7
         version: 6.9.7

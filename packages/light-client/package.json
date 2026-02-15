@@ -71,13 +71,14 @@
     "@lodestar/config": "workspace:^",
     "@lodestar/params": "workspace:^",
     "@lodestar/types": "workspace:^",
+    "@lodestar/state-transition": "workspace:^",
     "@lodestar/utils": "workspace:^",
-    "mitt": "^3.0.0"
+    "mitt": "^3.0.0",
+    "strict-event-emitter-types": "^2.0.0"
   },
   "devDependencies": {
     "@chainsafe/as-sha256": "^1.2.0",
     "@fastify/cors": "^10.0.1",
-    "@lodestar/state-transition": "workspace:^",
     "@types/qs": "^6.9.7",
     "fastify": "^5.7.4",
     "qs": "^6.11.1",
