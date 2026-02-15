@@ -31,6 +31,7 @@ import {ILcLogger, getConsoleLogger} from "./utils/logger.js";
 export {LightclientEvent} from "./events.js";
 export {upgradeLightClientFinalityUpdate, upgradeLightClientOptimisticUpdate} from "@lodestar/light-client-spec";
 export type {SyncCommitteeFast} from "./types.js";
+export type {LightClientP2PConfig} from "./lightClientOptions.js";
 
 export type GenesisData = {
   genesisTime: number;

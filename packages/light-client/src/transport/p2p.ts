@@ -7,10 +7,14 @@ import type {
   LightClientUpdate,
   SyncPeriod,
 } from "@lodestar/types";
+import type {LightClientP2PConfig} from "../lightClientOptions.js";
 import type {LightClientTransport} from "./interface.js";
 
 export class LightClientP2PTransport implements LightClientTransport {
-  constructor(private readonly privateKey: PrivateKey) {}
+  constructor(
+    private readonly privateKey: PrivateKey,
+    private readonly options: LightClientP2PConfig
+  ) {}
 
   getUpdates(
     _startPeriod: SyncPeriod,
