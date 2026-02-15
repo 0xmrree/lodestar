@@ -1,5 +1,5 @@
 import {expect} from "vitest";
-import {LightClientUpdateSummary, isBetterUpdate, toLightClientUpdateSummary} from "@lodestar/light-client/spec";
+import {LightClientUpdateSummary, isBetterUpdate, toLightClientUpdateSummary} from "@lodestar/light-client-spec";
 import {isForkPostAltair} from "@lodestar/params";
 import {InputType} from "@lodestar/spec-test-util";
 import {LightClientUpdate, altair, ssz, sszTypesFor} from "@lodestar/types";

@@ -1,4 +1,4 @@
-import {ZERO_HASH} from "@lodestar/light-client-spec";
+import {ZERO_HASH} from "../utils.js";
 
 export const SYNC_COMMITTEES_DEPTH = 4;
 export const SYNC_COMMITTEES_INDEX = 11;

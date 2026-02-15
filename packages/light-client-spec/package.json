@@ -1,0 +1,54 @@
+{
+  "name": "@lodestar/light-client-spec",
+  "description": "Light client spec logic shared between light-client and beacon-node",
+  "license": "Apache-2.0",
+  "author": "ChainSafe Systems",
+  "homepage": "https://github.com/ChainSafe/lodestar#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com:ChainSafe/lodestar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ChainSafe/lodestar/issues"
+  },
+  "version": "1.40.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "bun": "./src/index.ts",
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "!**/*.tsbuildinfo"
+  ],
+  "scripts": {
+    "clean": "rm -rf lib && rm -f *.tsbuildinfo",
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "pnpm run build --watch",
+    "build:release": "pnpm clean && pnpm run build",
+    "check-build": "node -e \"(async function() { await import('./lib/index.js') })()\"",
+    "check-types": "tsc",
+    "lint": "biome check src/",
+    "lint:fix": "pnpm run lint --write"
+  },
+  "dependencies": {
+    "@chainsafe/bls": "8.2.0",
+    "@chainsafe/persistent-merkle-tree": "^1.2.1",
+    "@chainsafe/ssz": "^1.2.2",
+    "@lodestar/config": "workspace:^",
+    "@lodestar/params": "workspace:^",
+    "@lodestar/types": "workspace:^",
+    "@lodestar/utils": "workspace:^"
+  },
+  "keywords": [
+    "ethereum",
+    "eth-consensus",
+    "beacon",
+    "light-client",
+    "blockchain"
+  ]
+}

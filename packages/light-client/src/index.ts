@@ -14,9 +14,7 @@ import {
 } from "@lodestar/types";
 import {fromHex, isErrorAborted, sleep, toRootHex} from "@lodestar/utils";
 import {LightclientEmitter, LightclientEvent} from "./events.js";
-import {LightclientSpec} from "./spec/index.js";
-import {ProcessUpdateOpts} from "./spec/processLightClientUpdate.js";
-import {validateLightClientBootstrap} from "./spec/validateLightClientBootstrap.js";
+import {LightclientSpec, ProcessUpdateOpts, validateLightClientBootstrap} from "@lodestar/light-client-spec";
 import {LightClientTransport} from "./transport/interface.js";
 import {chunkifyInclusiveRange} from "./utils/chunkify.js";
 import {
@@ -31,7 +29,7 @@ import {ILcLogger, getConsoleLogger} from "./utils/logger.js";
 
 // Re-export types
 export {LightclientEvent} from "./events.js";
-export {upgradeLightClientFinalityUpdate, upgradeLightClientOptimisticUpdate} from "./spec/utils.js";
+export {upgradeLightClientFinalityUpdate, upgradeLightClientOptimisticUpdate} from "@lodestar/light-client-spec";
 export type {SyncCommitteeFast} from "./types.js";
 
 export type GenesisData = {

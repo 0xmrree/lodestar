@@ -6,7 +6,7 @@ import {
   isBetterUpdate,
   toLightClientUpdateSummary,
   upgradeLightClientHeader,
-} from "@lodestar/light-client/spec";
+} from "@lodestar/light-client-spec";
 import {
   ForkName,
   ForkPostAltair,

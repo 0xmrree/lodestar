@@ -7,14 +7,16 @@ import {
   LightClientUpdate,
   Slot,
 } from "@lodestar/types";
-import {computeSyncPeriodAtSlot} from "../utils/index.js";
+import {computeSyncPeriodAtSlot} from "./utils/index.js";
 import {ProcessUpdateOpts, getSyncCommitteeAtPeriod, processLightClientUpdate} from "./processLightClientUpdate.js";
 import {ILightClientStore, LightClientStore, LightClientStoreEvents} from "./store.js";
 import {ZERO_HEADER, ZERO_SYNC_COMMITTEE, getZeroFinalityBranch, getZeroSyncCommitteeBranch} from "./utils.js";
 
 export type {LightClientUpdateSummary} from "./isBetterUpdate.js";
 export {isBetterUpdate, toLightClientUpdateSummary} from "./isBetterUpdate.js";
-export {upgradeLightClientHeader} from "./utils.js";
+export {upgradeLightClientHeader, upgradeLightClientFinalityUpdate, upgradeLightClientOptimisticUpdate, ZERO_HASH, isValidLightClientHeader} from "./utils.js";
+export type {ProcessUpdateOpts} from "./processLightClientUpdate.js";
+export {validateLightClientBootstrap} from "./validateLightClientBootstrap.js";
 
 export class LightclientSpec {
   readonly store: ILightClientStore;

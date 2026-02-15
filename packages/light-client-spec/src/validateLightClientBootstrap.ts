@@ -2,7 +2,7 @@ import {ChainForkConfig} from "@lodestar/config";
 import {isForkPostElectra} from "@lodestar/params";
 import {LightClientBootstrap, Root, ssz} from "@lodestar/types";
 import {byteArrayEquals, toHex} from "@lodestar/utils";
-import {isValidMerkleBranch} from "../utils/verifyMerkleBranch.js";
+import {isValidMerkleBranch} from "./utils/verifyMerkleBranch.js";
 import {isValidLightClientHeader} from "./utils.js";
 
 const CURRENT_SYNC_COMMITTEE_INDEX = 22;

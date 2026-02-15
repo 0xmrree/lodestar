@@ -303,9 +303,9 @@ importers:
       '@lodestar/fork-choice':
         specifier: workspace:^
         version: link:../fork-choice
-      '@lodestar/light-client':
+      '@lodestar/light-client-spec':
         specifier: workspace:^
-        version: link:../light-client
+        version: link:../light-client-spec
       '@lodestar/logger':
         specifier: workspace:^
         version: link:../logger
@@ -721,6 +721,9 @@ importers:
       '@lodestar/config':
         specifier: workspace:^
         version: link:../config
+      '@lodestar/light-client-spec':
+        specifier: workspace:^
+        version: link:../light-client-spec
       '@lodestar/params':
         specifier: workspace:^
         version: link:../params
@@ -758,6 +761,30 @@ importers:
       uint8arrays:
         specifier: ^5.0.1
         version: 5.1.0
+
+  packages/light-client-spec:
+    dependencies:
+      '@chainsafe/bls':
+        specifier: 8.2.0
+        version: 8.2.0(@chainsafe/blst@2.2.0)
+      '@chainsafe/persistent-merkle-tree':
+        specifier: ^1.2.1
+        version: 1.2.1
+      '@chainsafe/ssz':
+        specifier: ^1.2.2
+        version: 1.2.2
+      '@lodestar/config':
+        specifier: workspace:^
+        version: link:../config
+      '@lodestar/params':
+        specifier: workspace:^
+        version: link:../params
+      '@lodestar/types':
+        specifier: workspace:^
+        version: link:../types
+      '@lodestar/utils':
+        specifier: workspace:^
+        version: link:../utils
 
   packages/logger:
     dependencies:

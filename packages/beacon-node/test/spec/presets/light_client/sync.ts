@@ -1,6 +1,6 @@
 import {expect} from "vitest";
 import {ChainConfig, createBeaconConfig} from "@lodestar/config";
-import {LightclientSpec, toLightClientUpdateSummary} from "@lodestar/light-client/spec";
+import {LightclientSpec, toLightClientUpdateSummary} from "@lodestar/light-client-spec";
 import {isForkPostAltair} from "@lodestar/params";
 import {InputType} from "@lodestar/spec-test-util";
 import {computeSyncPeriodAtSlot} from "@lodestar/state-transition";
