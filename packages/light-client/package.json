@@ -65,6 +65,7 @@
     "@lodestar/api": "workspace:^",
     "@lodestar/config": "workspace:^",
     "@lodestar/light-client-spec": "workspace:^",
+    "@lodestar/beacon-node": "workspace:^",
     "@lodestar/params": "workspace:^",
     "@lodestar/types": "workspace:^",
     "@lodestar/state-transition": "workspace:^",
