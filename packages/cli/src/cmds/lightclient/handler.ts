@@ -2,7 +2,7 @@ import path from "node:path";
 import type {PrivateKey} from "@libp2p/interface";
 import {getClient} from "@lodestar/api";
 import {Lightclient} from "@lodestar/light-client";
-import {LightClientRestTransport} from "@lodestar/light-client/transport";
+import {LightClientRestTransport, LightClientP2PTransport, LightClientTransport} from "@lodestar/light-client/transport";
 import {LoggerNode, getNodeLogger} from "@lodestar/logger/node";
 import {fromHex} from "@lodestar/utils";
 import {ChainForkConfig} from "@lodestar/config";
@@ -17,11 +17,20 @@ import {ILightClientArgs} from "./options.js";
 export async function lightclientHandler(args: ILightClientArgs & GlobalArgs): Promise<void> {
   const {config, privateKey, logger} = await lightclientHandlerInit(args);
 
-  const api = getClient({baseUrl: args.beaconApiUrl}, {config});
-  const {genesisTime, genesisValidatorsRoot} = (await api.beacon.getGenesis()).value();
+  let transport: LightClientTransport;
+  let genesisTime: number;
+  let genesisValidatorsRoot: Uint8Array;
 
-  // TODO: use privateKey and args.p2p to initialize P2P network and wire up a P2P transport
-  void {privateKey, enabled: args.p2p !== false};
+  if (args.p2p === true) {
+    transport = new LightClientP2PTransport(privateKey);
+    // TODO: read genesisTime and genesisValidatorsRoot from network config.yaml instead of hardcoding
+    genesisTime = 1606824023; // mainnet
+    genesisValidatorsRoot = fromHex("0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95");
+  } else {
+    const api = getClient({baseUrl: args.beaconApiUrl}, {config});
+    ({genesisTime, genesisValidatorsRoot} = (await api.beacon.getGenesis()).value());
+    transport = new LightClientRestTransport(api);
+  }
 
   const client = await Lightclient.initializeFromCheckpointRoot({
     config,
@@ -31,7 +40,7 @@ export async function lightclientHandler(args: ILightClientArgs & GlobalArgs): P
       genesisValidatorsRoot,
     },
     checkpointRoot: fromHex(args.checkpointRoot),
-    transport: new LightClientRestTransport(api),
+    transport,
   });
 
   void client.start();

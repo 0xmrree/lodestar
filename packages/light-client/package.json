@@ -65,6 +65,7 @@
     "@lodestar/api": "workspace:^",
     "@lodestar/config": "workspace:^",
     "@lodestar/light-client-spec": "workspace:^",
+    "@libp2p/interface": "^2.7.0",
     "@lodestar/beacon-node": "workspace:^",
     "@lodestar/params": "workspace:^",
     "@lodestar/types": "workspace:^",
