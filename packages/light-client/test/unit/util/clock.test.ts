@@ -1,7 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
 import {config} from "@lodestar/config/default";
 import {SLOTS_PER_EPOCH} from "@lodestar/params";
-import {Clock, ClockEvent} from "../../../src/util/clock.js";
+import {Clock, ClockEvent} from "../../../src/network/utils/clock.ts";
 
 describe("Clock", () => {
   let abortController: AbortController;

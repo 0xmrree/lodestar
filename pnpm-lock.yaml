@@ -709,15 +709,42 @@ importers:
       '@chainsafe/blst':
         specifier: ^2.2.0
         version: 2.2.0
+      '@chainsafe/libp2p-gossipsub':
+        specifier: ^14.1.2
+        version: 14.1.2
       '@chainsafe/persistent-merkle-tree':
         specifier: ^1.2.1
         version: 1.2.1
       '@chainsafe/ssz':
         specifier: ^1.2.2
         version: 1.2.2
+      '@libp2p/bootstrap':
+        specifier: ^11.0.32
+        version: 11.0.46
+      '@libp2p/crypto':
+        specifier: ^5.0.15
+        version: 5.1.7
+      '@libp2p/identify':
+        specifier: ^3.0.27
+        version: 3.0.38
       '@libp2p/interface':
         specifier: ^2.7.0
         version: 2.10.5
+      '@libp2p/mdns':
+        specifier: ^11.0.32
+        version: 11.0.46
+      '@libp2p/mplex':
+        specifier: ^11.0.32
+        version: 11.0.46
+      '@libp2p/peer-id':
+        specifier: ^5.1.0
+        version: 5.1.8
+      '@libp2p/prometheus-metrics':
+        specifier: ^4.3.15
+        version: 4.3.29
+      '@libp2p/tcp':
+        specifier: ^10.1.8
+        version: 10.1.18
       '@lodestar/api':
         specifier: workspace:^
         version: link:../api
@@ -730,9 +757,15 @@ importers:
       '@lodestar/light-client-spec':
         specifier: workspace:^
         version: link:../light-client-spec
+      '@lodestar/logger':
+        specifier: workspace:^
+        version: link:../logger
       '@lodestar/params':
         specifier: workspace:^
         version: link:../params
+      '@lodestar/reqresp':
+        specifier: workspace:^
+        version: link:../reqresp
       '@lodestar/state-transition':
         specifier: workspace:^
         version: link:../state-transition
