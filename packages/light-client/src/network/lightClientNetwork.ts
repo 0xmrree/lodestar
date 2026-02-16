@@ -14,24 +14,33 @@ import {
   fulu,
 } from "@lodestar/types";
 
-import {Metrics} from "../metrics/index.js";
-import {NetworkProcessor, PendingGossipsubMessage} from "./processor/index.js";
-import {getGenesisStatus} from "./utils/status.js";
-import {IClock} from "../util/clock.js";
-import {PeerIdStr, peerIdToString} from "../util/peerId.js";
-import {INetworkCore, LightClientNetworkCore} from "./core/index.js";
-import {INetworkEventBus, NetworkEvent, NetworkEventBus, NetworkEventData} from "./events.js";
-import {GossipHandlers, GossipType} from "./gossip/index.js";
-import {INetwork} from "./interface.js";
-import {NetworkOptions} from "./options.js";
-import {PeerAction, PeerScoreStats} from "./peers/index.js";
-import {PeerSyncMeta} from "./peers/peersData.js";
-import {ReqRespMethod} from "./reqresp/index.js";
-import {GetReqRespHandlerFn, Version, responseSszTypeByMethod} from "./reqresp/types.js";
+import {ResponseIncoming} from "@lodestar/reqresp";
 import {
+  GossipHandlers,
+  GossipType,
+  GetReqRespHandlerFn,
+  INetworkCore,
+  INetworkEventBus,
+  NetworkEvent,
+  NetworkEventBus,
+  NetworkEventData,
+  NetworkOptions,
+  NetworkProcessor,
+  PeerAction,
+  PeerScoreStats,
+  PeerSyncMeta,
+  PendingGossipsubMessage,
+  ReqRespMethod,
+  Version,
   collectExactOneTyped,
   collectMaxResponseTyped,
-} from "./reqresp/utils/collect.js";
+  requestSszTypeByMethod,
+  responseSszTypeByMethod,
+  type PeerIdStr,
+} from "@lodestar/beacon-node/network";
+import {getGenesisStatus} from "./utils/status.js";
+import {IClock} from "./utils/clock.js";
+import {LightClientNetworkCore} from "./core/index.js";
 
 type NetworkModules = {
   opts: NetworkOptions;
@@ -50,7 +59,6 @@ export type NetworkInitModules = {
   privateKey: PrivateKey;
   peerStoreDir?: string;
   logger: LoggerNode;
-  metrics: Metrics | null;
   clock: IClock;
   getReqRespHandler: GetReqRespHandlerFn;
   // Optionally pass custom GossipHandlers, for testing
@@ -65,7 +73,7 @@ export type NetworkInitModules = {
  * - libp2p in worker
  * - libp2p in main thread
  */
-export class LightClientNetwork implements INetwork {
+export class LightClientNetwork {
   readonly peerId: PeerId;
   // TODO: Make private
   readonly events: INetworkEventBus;
@@ -81,7 +89,7 @@ export class LightClientNetwork implements INetwork {
   private readonly core: INetworkCore;
 
   private subscribedToCoreTopics = false;
-  private connectedPeersSyncMeta = new Map<PeerIdStr, Omit<PeerSyncMeta, "peerId">>();
+  private connectedPeersSyncMeta = new Map<string, Omit<PeerSyncMeta, "peerId">>();
 
   constructor(modules: NetworkModules) {
     this.peerId = peerIdFromPrivateKey(modules.privateKey);
@@ -136,7 +144,7 @@ export class LightClientNetwork implements INetwork {
 
     const multiaddresses = opts.localMultiaddrs?.join(",");
     const peerId = peerIdFromPrivateKey(privateKey);
-    logger.info(`PeerId ${peerIdToString(peerId)}, Multiaddrs ${multiaddresses}`);
+    logger.info(`PeerId ${peerId.toString()}, Multiaddrs ${multiaddresses}`);
 
     return new LightClientNetwork({
       opts,
@@ -167,7 +175,7 @@ export class LightClientNetwork implements INetwork {
     this.logger.debug("network core closed");
   }
 
-  async reportPeer(peer: PeerIdStr, action: PeerAction, actionName: string): Promise<void> {
+  async reportPeer(peer: string, action: PeerAction, actionName: string): Promise<void> {
     return this.core.reportPeer(peer, action, actionName);
   }
   
@@ -206,6 +214,20 @@ export class LightClientNetwork implements INetwork {
       this.sendReqRespRequest(peerId, ReqRespMethod.LightClientFinalityUpdate, [Version.V1], null),
       responseSszTypeByMethod[ReqRespMethod.LightClientFinalityUpdate]
     );
+  }
+
+  private sendReqRespRequest<Req>(
+    peerId: PeerIdStr,
+    method: ReqRespMethod,
+    versions: number[],
+    request: Req
+  ): AsyncIterable<ResponseIncoming> {
+    const fork = this.config.getForkName(this.clock.currentSlot);
+    const requestType = requestSszTypeByMethod(fork, this.config)[method];
+    const requestData = requestType ? requestType.serialize(request as never) : new Uint8Array();
+
+    // ReqResp outgoing request, emit from main thread to worker
+    return this.core.sendReqRespRequest({peerId, method, versions, requestData});
   }
 
   async sendLightClientUpdatesByRange(
@@ -290,7 +312,7 @@ export class LightClientNetwork implements INetwork {
     this.logger.verbose("onPeerConnected", {
       peer,
       clientAgent,
-      custodyColumns: prettyPrintIndices(custodyColumns),
+      custodyColumns: "N/A",
       earliestAvailableSlot: earliestAvailableSlot ?? "pre-fulu",
     });
     this.connectedPeersSyncMeta.set(peer, {

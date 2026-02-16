@@ -1,8 +1,15 @@
+export * from "./core/index.js";
 export * from "./events.js";
 export * from "./gossip/index.js";
 export * from "./interface.js";
 export * from "./libp2p/index.js";
 export * from "./network.js";
+export * from "./options.js";
 export * from "./peers/index.js";
+export * from "./peers/peersData.js";
+export * from "./processor/index.js";
 export * from "./reqresp/ReqRespBeaconNode.js";
+export * from "./reqresp/types.js";
+export * from "./reqresp/utils/collect.js";
 export * from "./util.js";
+export type {PeerIdStr} from "../util/peerId.js";
