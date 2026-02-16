@@ -298,16 +298,6 @@ export class LightClientNetworkCore implements INetworkCore {
     return this.networkConfig;
   }
 
-  async scrapeMetrics(): Promise<string> {
-    return [
-      (await this.metrics?.register.metrics()) ?? "",
-      // biome-ignore lint/complexity/useLiteralKeys: `discovery` is a private attribute
-      (await this.peerManager["discovery"]?.discv5.scrapeMetrics()) ?? "",
-    ]
-      .filter((str) => str.length > 0)
-      .join("\n\n");
-  }
-
   async updateStatus(status: Status): Promise<void> {
     this.statusCache.update(status);
   }
@@ -316,114 +306,9 @@ export class LightClientNetworkCore implements INetworkCore {
     this.peerManager.reportPeer(peerIdFromString(peer), action, actionName);
   }
 
-  async reStatusPeers(peers: PeerIdStr[]): Promise<void> {
-    this.peerManager.reStatusPeers(peers);
-  }
-
-  /**
-   * Request att subnets up `toSlot`. Network will ensure to mantain some peers for each
-   */
-  async prepareBeaconCommitteeSubnets(subscriptions: CommitteeSubscription[]): Promise<void> {
-    this.attnetsService.addCommitteeSubscriptions(subscriptions);
-    if (subscriptions.length > 0) this.peerManager.onCommitteeSubscriptions();
-  }
-
-  async prepareSyncCommitteeSubnets(subscriptions: CommitteeSubscription[]): Promise<void> {
-    this.syncnetsService.addCommitteeSubscriptions(subscriptions);
-    if (subscriptions.length > 0) this.peerManager.onCommitteeSubscriptions();
-  }
-
-  /**
-   * Subscribe to all gossip events. Safe to call multiple times
-   */
-  async subscribeGossipCoreTopics(): Promise<void> {
-    if (!(await this.isSubscribedToGossipCoreTopics())) {
-      this.logger.info("Subscribed gossip core topics");
-    }
-
-    for (const boundary of getActiveForkBoundaries(this.config, this.clock.currentEpoch)) {
-      this.subscribeCoreTopicsAtBoundary(this.networkConfig, boundary);
-    }
-  }
-
-  /**
-   * Unsubscribe from all gossip events. Safe to call multiple times
-   */
-  async unsubscribeGossipCoreTopics(): Promise<void> {
-    for (const boundary of this.forkBoundariesByEpoch.values()) {
-      this.unsubscribeCoreTopicsAtBoundary(this.networkConfig, boundary);
-    }
-  }
-
-  async isSubscribedToGossipCoreTopics(): Promise<boolean> {
-    return this.forkBoundariesByEpoch.size > 0;
-  }
-
   sendReqRespRequest(data: OutgoingRequestArgs): AsyncIterable<ResponseIncoming> {
     const peerId = peerIdFromString(data.peerId);
     return this.reqResp.sendRequestWithoutEncoding(peerId, data.method, data.versions, data.requestData);
-  }
-
-  async publishGossip(topic: string, data: Uint8Array, opts?: PublishOpts | undefined): Promise<number> {
-    const {recipients} = await this.gossip.publish(topic, data, opts);
-    return recipients.length;
-  }
-
-  /**
-   * Handler of ChainEvent.updateTargetCustodyGroupCount event
-   * Updates the target custody group count in the network config and metadata.
-   * Also subscribes to new data_column_sidecar subnet topics for the new custody group count.
-   */
-  async setTargetGroupCount(count: number): Promise<void> {
-    this.networkConfig.custodyConfig.updateTargetCustodyGroupCount(count);
-    this.metadata.custodyGroupCount = count;
-    // cannot call subscribeGossipCoreTopics() because we subsribed to core topics already
-    // we only need to subscribe to more data_column_sidecar topics
-    const dataColumnSubnetTopics = getDataColumnSidecarTopics(this.networkConfig);
-    const activeBoundaries = getActiveForkBoundaries(this.config, this.clock.currentEpoch);
-    for (const boundary of activeBoundaries) {
-      for (const topic of dataColumnSubnetTopics) {
-        // there are existing subscriptions for old subnets, in that case gossipsub will just ignore
-        this.gossip.subscribeTopic({...topic, boundary});
-      }
-    }
-  }
-
-  // REST API queries
-
-  async getNetworkIdentity(): Promise<routes.node.NetworkIdentity> {
-    // biome-ignore lint/complexity/useLiteralKeys: `discovery` is a private attribute
-    const enr = await this.peerManager["discovery"]?.discv5.enr();
-
-    // enr.getFullMultiaddr can counterintuitively return undefined near startup if the enr.ip or enr.ip6 is not set.
-    // Eventually, the enr will be updated with the correct ip after discv5 runs for a while.
-
-    // Node's addresses on which is listening for discv5 requests.
-    // The example provided by the beacon-APIs show a _full_ multiaddr, ie including the peer id, so we include it.
-    const discoveryAddresses = [
-      (await enr?.getFullMultiaddr("udp"))?.toString(),
-      (await enr?.getFullMultiaddr("udp6"))?.toString(),
-    ].filter((addr): addr is string => Boolean(addr));
-
-    // Node's addresses on which eth2 RPC requests are served.
-    const p2pAddresses = [
-      // It is useful to include listen multiaddrs even if they likely aren't public IPs
-      // This means that we will always return some multiaddrs
-      ...this.libp2p.getMultiaddrs().map((ma) => ma.toString()),
-
-      (await enr?.getFullMultiaddr("tcp"))?.toString(),
-      (await enr?.getFullMultiaddr("tcp6"))?.toString(),
-      (await enr?.getFullMultiaddr("quic"))?.toString(),
-      (await enr?.getFullMultiaddr("quic6"))?.toString(),
-    ].filter((addr): addr is string => Boolean(addr));
-
-    return {
-      peerId: peerIdToString(this.libp2p.peerId),
-      enr: enr?.encodeTxt() || "",
-      discoveryAddresses,
-      p2pAddresses,
-      metadata: this.metadata.json,
-    };
   }
 
   getConnectionsByPeer(): Map<string, Connection[]> {
@@ -432,14 +317,6 @@ export class LightClientNetworkCore implements INetworkCore {
       m.set(k, v.value);
     }
     return m;
-  }
-
-  async getConnectedPeers(): Promise<PeerIdStr[]> {
-    return this.peerManager.getConnectedPeerIds().map(peerIdToString);
-  }
-
-  async getConnectedPeerCount(): Promise<number> {
-    return this.peerManager.getConnectedPeerIds().length;
   }
 
   // Debug
