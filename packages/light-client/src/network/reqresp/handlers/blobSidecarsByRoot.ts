@@ -1,5 +1,5 @@
 import {RespStatus, ResponseError, ResponseOutgoing} from "@lodestar/reqresp";
-import {BlobSidecarsByRootRequest} from "../../../util/types.js";
+import {BlobSidecarsByRootRequest} from "@lodestar/beacon-node/util";
 import {LC_RESOURCE_UNAVAILABLE} from "./constants.js";
 
 export async function* onBlobSidecarsByRoot(
