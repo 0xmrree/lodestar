@@ -1,88 +1,18 @@
 import {PeerId} from "@libp2p/interface";
 import {BeaconConfig} from "@lodestar/config";
-import {GENESIS_SLOT, isForkPostDeneb, isForkPostFulu} from "@lodestar/params";
+import {GENESIS_SLOT, isForkPostDeneb} from "@lodestar/params";
 import {RespStatus, ResponseError, ResponseOutgoing} from "@lodestar/reqresp";
-import {computeEpochAtSlot} from "@lodestar/state-transition";
 import {deneb, phase0} from "@lodestar/types";
-import {IBeaconChain} from "../../../chain/index.js";
-import {IBeaconDb} from "../../../db/index.js";
-import {prettyPrintPeerId} from "../../util.ts";
-
-// TODO: Unit test
+import {LC_RESOURCE_UNAVAILABLE} from "./constants.js";
 
 export async function* onBeaconBlocksByRange(
   request: phase0.BeaconBlocksByRangeRequest,
-  chain: IBeaconChain,
-  db: IBeaconDb,
   peerId: PeerId,
-  peerClient: string
+  peerClient: string,
+  config: BeaconConfig
 ): AsyncIterable<ResponseOutgoing> {
-  const {startSlot, count} = validateBeaconBlocksByRangeRequest(chain.config, request);
-  const endSlot = startSlot + count;
-
-  const finalized = db.blockArchive;
-  // in the case of initializing from a non-finalized state, we don't have the finalized block so this api does not work
-  // chain.forkChoice.getFinalizeBlock().slot
-  const finalizedSlot = chain.forkChoice.getFinalizedCheckpointSlot();
-
-  const forkName = chain.config.getForkName(startSlot);
-  if (isForkPostFulu(forkName) && startSlot < chain.earliestAvailableSlot) {
-    chain.logger.verbose("Peer did not respect earliestAvailableSlot for BeaconBlocksByRange", {
-      peer: prettyPrintPeerId(peerId),
-      client: peerClient,
-    });
-    return;
-  }
-
-  // Finalized range of blocks
-  if (startSlot <= finalizedSlot) {
-    // Chain of blobs won't change
-    for await (const {key, value} of finalized.binaryEntriesStream({gte: startSlot, lt: endSlot})) {
-      yield {
-        data: value,
-        boundary: chain.config.getForkBoundaryAtEpoch(computeEpochAtSlot(finalized.decodeKey(key))),
-      };
-    }
-  }
-
-  // Non-finalized range of blocks
-  if (endSlot > finalizedSlot) {
-    const headRoot = chain.forkChoice.getHeadRoot();
-    // TODO DENEB: forkChoice should mantain an array of canonical blocks, and change only on reorg
-    const headChain = chain.forkChoice.getAllAncestorBlocks(headRoot);
-    // getAllAncestorBlocks response includes the head node, so it's the full chain.
-
-    // Iterate head chain with ascending block numbers
-    for (let i = headChain.length - 1; i >= 0; i--) {
-      const block = headChain[i];
-
-      // Must include only blocks in the range requested
-      if (block.slot >= startSlot && block.slot < endSlot) {
-        // Note: Here the forkChoice head may change due to a re-org, so the headChain reflects the canonical chain
-        // at the time of the start of the request. Spec is clear the chain of blobs must be consistent, but on
-        // re-org there's no need to abort the request
-        // Spec: https://github.com/ethereum/consensus-specs/blob/a1e46d1ae47dd9d097725801575b46907c12a1f8/specs/eip4844/p2p-interface.md#blobssidecarsbyrange-v1
-
-        const blockBytes = await chain.getSerializedBlockByRoot(block.blockRoot);
-        if (!blockBytes) {
-          throw new ResponseError(
-            RespStatus.SERVER_ERROR,
-            `No block for root ${block.blockRoot} slot ${block.slot}, startSlot=${startSlot} endSlot=${endSlot} finalizedSlot=${finalizedSlot}`
-          );
-        }
-
-        yield {
-          data: blockBytes.block,
-          boundary: chain.config.getForkBoundaryAtEpoch(computeEpochAtSlot(block.slot)),
-        };
-      }
-
-      // If block is after endSlot, stop iterating
-      else if (block.slot >= endSlot) {
-        break;
-      }
-    }
-  }
+  validateBeaconBlocksByRangeRequest(config, request);
+  throw new ResponseError(RespStatus.RESOURCE_UNAVAILABLE, LC_RESOURCE_UNAVAILABLE);
 }
 
 export function validateBeaconBlocksByRangeRequest(

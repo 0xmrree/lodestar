@@ -19,6 +19,8 @@ import {onLightClientFinalityUpdate} from "./lightClientFinalityUpdate.js";
 import {onLightClientOptimisticUpdate} from "./lightClientOptimisticUpdate.js";
 import {onLightClientUpdatesByRange} from "./lightClientUpdatesByRange.js";
 
+export {LC_RESOURCE_UNAVAILABLE} from "./constants.js";
+
 function notImplemented(method: ReqRespMethod): ProtocolHandler {
   return () => {
     throw Error(`Handler not implemented for ${method}`);

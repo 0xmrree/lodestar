@@ -1,21 +1,6 @@
 import {RespStatus, ResponseError, ResponseOutgoing} from "@lodestar/reqresp";
-import {computeEpochAtSlot} from "@lodestar/state-transition";
-import {IBeaconChain} from "../../../chain/index.js";
-import {assertLightClientServer} from "../../../node/utils/lightclient.js";
-import {ReqRespMethod, responseSszTypeByMethod} from "../types.js";
+import {LC_RESOURCE_UNAVAILABLE} from "./constants.js";
 
-export async function* onLightClientFinalityUpdate(chain: IBeaconChain): AsyncIterable<ResponseOutgoing> {
-  assertLightClientServer(chain.lightClientServer);
-
-  const update = chain.lightClientServer.getFinalityUpdate();
-  if (update === null) {
-    throw new ResponseError(RespStatus.RESOURCE_UNAVAILABLE, "No latest finality update available");
-  }
-
-  const boundary = chain.config.getForkBoundaryAtEpoch(computeEpochAtSlot(update.signatureSlot));
-  const type = responseSszTypeByMethod[ReqRespMethod.LightClientFinalityUpdate](boundary.fork, 0);
-  yield {
-    data: type.serialize(update),
-    boundary,
-  };
+export async function* onLightClientFinalityUpdate(): AsyncIterable<ResponseOutgoing> {
+  throw new ResponseError(RespStatus.RESOURCE_UNAVAILABLE, LC_RESOURCE_UNAVAILABLE);
 }

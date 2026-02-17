@@ -1,22 +1,9 @@
-import {ResponseOutgoing} from "@lodestar/reqresp";
-import {computeEpochAtSlot} from "@lodestar/state-transition";
-import {toRootHex} from "@lodestar/utils";
-import {IBeaconChain} from "../../../chain/index.js";
+import {RespStatus, ResponseError, ResponseOutgoing} from "@lodestar/reqresp";
 import {BeaconBlocksByRootRequest} from "../../../util/types.js";
+import {LC_RESOURCE_UNAVAILABLE} from "./constants.js";
 
 export async function* onBeaconBlocksByRoot(
   requestBody: BeaconBlocksByRootRequest,
-  chain: IBeaconChain
 ): AsyncIterable<ResponseOutgoing> {
-  for (const blockRoot of requestBody) {
-    const root = blockRoot;
-    const block = await chain.getSerializedBlockByRoot(toRootHex(root));
-
-    if (block) {
-      yield {
-        data: block.block,
-        boundary: chain.config.getForkBoundaryAtEpoch(computeEpochAtSlot(block.slot)),
-      };
-    }
-  }
+  throw new ResponseError(RespStatus.RESOURCE_UNAVAILABLE, LC_RESOURCE_UNAVAILABLE);
 }
