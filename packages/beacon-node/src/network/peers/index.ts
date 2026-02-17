@@ -1,3 +1,4 @@
+export * from "./client.js";
 export * from "./peerManager.js";
 export * from "./score/index.js";
 export * from "./utils/index.js";

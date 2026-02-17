@@ -15,29 +15,50 @@ import {
 } from "@lodestar/reqresp";
 import {Metadata, Status, phase0, ssz} from "@lodestar/types";
 import {Logger} from "@lodestar/utils";
-import {callInNextEventLoop} from "../../util/eventLoop.js";
-import {NetworkCoreMetrics} from "../core/metrics.js";
-import {INetworkEventBus, NetworkEvent} from "../events.js";
-import {MetadataController} from "../metadata.js";
-import {ClientKind} from "../peers/client.ts";
-import {PeersData} from "../peers/peersData.js";
-import {IPeerRpcScoreStore, PeerAction} from "../peers/score/index.js";
-import {StatusCache} from "../statusCache.js";
-import * as protocols from "./protocols.js";
-import {onOutgoingReqRespError} from "./score.js";
 import {
+  BeaconBlocksByRange,
+  BeaconBlocksByRangeV2,
+  BeaconBlocksByRoot,
+  BeaconBlocksByRootV2,
+  BlobSidecarsByRange,
+  BlobSidecarsByRoot,
+  ClientKind,
+  DataColumnSidecarsByRange,
+  DataColumnSidecarsByRoot,
   GetReqRespHandlerFn,
+  Goodbye,
+  INetworkEventBus,
+  IPeerRpcScoreStore,
+  LightClientBootstrap,
+  LightClientFinalityUpdate,
+  LightClientOptimisticUpdate,
+  LightClientUpdatesByRange,
+  Metadata as MetadataProtocol,
+  MetadataController,
+  MetadataV2,
+  MetadataV3,
+  NetworkCoreMetrics,
+  NetworkEvent,
+  PeerAction,
+  PeersData,
+  Ping,
   ProtocolNoHandler,
   ReqRespMethod,
   RequestTypedContainer,
+  Status as StatusProtocol,
+  StatusCache,
+  StatusV2,
   Version,
+  collectExactOneTyped,
+  getReqRespHandlers,
+  onOutgoingReqRespError,
   requestSszTypeByMethod,
   responseSszTypeByMethod,
-} from "./types.js";
-import {collectExactOneTyped} from "./utils/collect.js";
+} from "@lodestar/beacon-node/network";
+import {callInNextEventLoop} from "@lodestar/beacon-node/util";
 
-export {getReqRespHandlers} from "./handlers/index.js";
-export {ReqRespMethod, type RequestTypedContainer} from "./types.js";
+export {getReqRespHandlers};
+export {ReqRespMethod, type RequestTypedContainer};
 
 export interface ReqRespBeaconNodeModules {
   libp2p: Libp2p;
@@ -229,39 +250,39 @@ export class ReqRespLightClient extends ReqResp {
   private getProtocolsAtBoundary(boundary: ForkBoundary): [ProtocolNoHandler, ProtocolHandler][] {
     const {fork} = boundary;
     const protocolsAtFork: [ProtocolNoHandler, ProtocolHandler][] = [
-      [protocols.Ping(fork, this.config), this.onPing.bind(this)],
-      [protocols.Goodbye(fork, this.config), this.onGoodbye.bind(this)],
+      [Ping(fork, this.config), this.onPing.bind(this)],
+      [Goodbye(fork, this.config), this.onGoodbye.bind(this)],
       // Support V3 methods as soon as implemented (for fulu)
       // Follows pattern for altair:
       // Ref https://github.com/ethereum/consensus-specs/blob/v1.2.0/specs/altair/p2p-interface.md#transitioning-from-v1-to-v2
-      [protocols.MetadataV3(fork, this.config), this.onMetadata.bind(this)],
-      [protocols.BeaconBlocksByRangeV2(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRange)],
-      [protocols.BeaconBlocksByRootV2(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRoot)],
+      [MetadataV3(fork, this.config), this.onMetadata.bind(this)],
+      [BeaconBlocksByRangeV2(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRange)],
+      [BeaconBlocksByRootV2(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRoot)],
     ];
 
     if (ForkSeq[fork] < ForkSeq.altair) {
       // Unregister V1 topics at the fork boundary, so only declare for pre-altair
       protocolsAtFork.push(
-        [protocols.Metadata(fork, this.config), this.onMetadata.bind(this)],
-        [protocols.BeaconBlocksByRange(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRange)],
-        [protocols.BeaconBlocksByRoot(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRoot)]
+        [MetadataProtocol(fork, this.config), this.onMetadata.bind(this)],
+        [BeaconBlocksByRange(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRange)],
+        [BeaconBlocksByRoot(fork, this.config), this.getHandler(ReqRespMethod.BeaconBlocksByRoot)]
       );
     }
 
     if (ForkSeq[fork] >= ForkSeq.altair && !this.disableLightClientServer) {
       // Should be okay to enable before altair, but for consistency only enable afterwards
       protocolsAtFork.push(
-        [protocols.LightClientBootstrap(fork, this.config), this.getHandler(ReqRespMethod.LightClientBootstrap)],
+        [LightClientBootstrap(fork, this.config), this.getHandler(ReqRespMethod.LightClientBootstrap)],
         [
-          protocols.LightClientFinalityUpdate(fork, this.config),
+          LightClientFinalityUpdate(fork, this.config),
           this.getHandler(ReqRespMethod.LightClientFinalityUpdate),
         ],
         [
-          protocols.LightClientOptimisticUpdate(fork, this.config),
+          LightClientOptimisticUpdate(fork, this.config),
           this.getHandler(ReqRespMethod.LightClientOptimisticUpdate),
         ],
         [
-          protocols.LightClientUpdatesByRange(fork, this.config),
+          LightClientUpdatesByRange(fork, this.config),
           this.getHandler(ReqRespMethod.LightClientUpdatesByRange),
         ]
       );
@@ -269,29 +290,29 @@ export class ReqRespLightClient extends ReqResp {
 
     if (ForkSeq[fork] >= ForkSeq.deneb) {
       protocolsAtFork.push(
-        [protocols.BlobSidecarsByRoot(fork, this.config), this.getHandler(ReqRespMethod.BlobSidecarsByRoot)],
-        [protocols.BlobSidecarsByRange(fork, this.config), this.getHandler(ReqRespMethod.BlobSidecarsByRange)]
+        [BlobSidecarsByRoot(fork, this.config), this.getHandler(ReqRespMethod.BlobSidecarsByRoot)],
+        [BlobSidecarsByRange(fork, this.config), this.getHandler(ReqRespMethod.BlobSidecarsByRange)]
       );
     }
 
     if (ForkSeq[fork] < ForkSeq.fulu) {
       // Unregister StatusV1, MetadataV2 at the fork boundary, so only declare for pre-fulu
       protocolsAtFork.push(
-        [protocols.Status(fork, this.config), this.onStatus.bind(this)],
-        [protocols.MetadataV2(fork, this.config), this.onMetadata.bind(this)]
+        [StatusProtocol(fork, this.config), this.onStatus.bind(this)],
+        [MetadataV2(fork, this.config), this.onMetadata.bind(this)]
       );
     } else {
       protocolsAtFork.push(
         // We can't handle StatusV2 correctly pre-fulu as request type is selected based on fork
         // instead of protocol version. This is not easily fixable with our current architecture.
         // See https://github.com/ChainSafe/lodestar/pull/8168 for more details.
-        [protocols.StatusV2(fork, this.config), this.onStatus.bind(this)],
+        [StatusV2(fork, this.config), this.onStatus.bind(this)],
         [
-          protocols.DataColumnSidecarsByRoot(fork, this.config),
+          DataColumnSidecarsByRoot(fork, this.config),
           this.getHandler(ReqRespMethod.DataColumnSidecarsByRoot),
         ],
         [
-          protocols.DataColumnSidecarsByRange(fork, this.config),
+          DataColumnSidecarsByRange(fork, this.config),
           this.getHandler(ReqRespMethod.DataColumnSidecarsByRange),
         ]
       );
