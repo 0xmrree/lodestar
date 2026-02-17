@@ -7,7 +7,7 @@ import {BeaconConfig, ForkBoundary} from "@lodestar/config";
 import type {LoggerNode} from "@lodestar/logger/node";
 import {isForkPostFulu} from "@lodestar/params";
 import {ResponseIncoming} from "@lodestar/reqresp";
-import {Epoch, Slot, Status, SubnetID, fulu, sszTypesFor} from "@lodestar/types";
+import {Epoch, Status, fulu, sszTypesFor} from "@lodestar/types";
 import {formatNodePeer} from "../../api/impl/node/utils.js";
 import {ClockEvent, IClock} from "../../util/clock.js";
 import {CustodyConfig} from "../../util/dataColumns.js";
@@ -27,8 +27,9 @@ import {PeersData} from "../peers/peersData.js";
 import {ReqRespBeaconNode} from "../reqresp/ReqRespBeaconNode.js";
 import {GetReqRespHandlerFn, OutgoingRequestArgs} from "../reqresp/types.js";
 import {LocalStatusCache} from "../statusCache.js";
-import {CommitteeSubscription, IAttnetsService, SubnetsService, computeNodeId} from "../subnets/interface.js";
-import {RequestedSubnet} from "../peers/utils/index.js";
+import {computeNodeId} from "../subnets/interface.js";
+import {noopAttnetsService} from "../subnets/noopAttnetsService.js";
+import {noopSyncnetsService} from "../subnets/noopSyncnetsService.js";
 import {getConnectionsMap} from "../util.js";
 import {MultiaddrStr} from "./types.js";
 
@@ -187,27 +188,6 @@ export class LightClientNetworkCore {
 
     await reqResp.start();
     await gossip.start();
-
-    // PeerManager requires attnetsService and syncnetsService — pass no-op stubs since
-    // the LC has no validator duties and never subscribes to attestation/sync subnets.
-    // getActiveSubnets() returning [] is safe: prioritizePeers() gates both attnet and syncnet
-    // subnet-seeking logic on `activeAttnets.length > 0` / `activeSyncnets.length > 0`
-    // (see prioritizePeers.ts:241, 267), so empty arrays simply skip all subnet peer queries.
-    const noopAttnetsService: IAttnetsService = {
-      close: () => {},
-      addCommitteeSubscriptions: (_subscriptions: CommitteeSubscription[]) => {},
-      getActiveSubnets: (): RequestedSubnet[] => [],
-      subscribeSubnetsNextBoundary: (_boundary: ForkBoundary) => {},
-      unsubscribeSubnetsPrevBoundary: (_boundary: ForkBoundary) => {},
-      shouldProcess: (_subnet: SubnetID, _slot: Slot) => false,
-    };
-    const noopSyncnetsService: SubnetsService = {
-      close: () => {},
-      addCommitteeSubscriptions: (_subscriptions: CommitteeSubscription[]) => {},
-      getActiveSubnets: (): RequestedSubnet[] => [],
-      subscribeSubnetsNextBoundary: (_boundary: ForkBoundary) => {},
-      unsubscribeSubnetsPrevBoundary: (_boundary: ForkBoundary) => {},
-    };
 
     const peerManager = await PeerManager.init(
       {
