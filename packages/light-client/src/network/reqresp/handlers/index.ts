@@ -1,8 +1,7 @@
 import {ProtocolHandler} from "@lodestar/reqresp";
+import {BeaconConfig} from "@lodestar/config";
 import {ssz} from "@lodestar/types";
 import {GetReqRespHandlerFn, ReqRespMethod} from "@lodestar/beacon-node/network";
-import {IBeaconChain} from "@lodestar/beacon-node/chain";
-import {IBeaconDb} from "@lodestar/beacon-node/db";
 import {
   BeaconBlocksByRootRequestType,
   BlobSidecarsByRootRequestType,
@@ -27,11 +26,7 @@ function notImplemented(method: ReqRespMethod): ProtocolHandler {
   };
 }
 
-/**
- * The ReqRespHandler module handles app-level requests / responses from other peers,
- * fetching state from the chain and database as needed.
- */
-export function getReqRespHandlers({db, chain}: {db: IBeaconDb; chain: IBeaconChain}): GetReqRespHandlerFn {
+export function getReqRespHandlers(config: BeaconConfig): GetReqRespHandlerFn {
   const handlers: Record<ReqRespMethod, ProtocolHandler> = {
     [ReqRespMethod.Status]: notImplemented(ReqRespMethod.Status),
     [ReqRespMethod.Goodbye]: notImplemented(ReqRespMethod.Goodbye),
@@ -39,41 +34,40 @@ export function getReqRespHandlers({db, chain}: {db: IBeaconDb; chain: IBeaconCh
     [ReqRespMethod.Metadata]: notImplemented(ReqRespMethod.Metadata),
     [ReqRespMethod.BeaconBlocksByRange]: (req, peerId, peerClient) => {
       const body = ssz.phase0.BeaconBlocksByRangeRequest.deserialize(req.data);
-      return onBeaconBlocksByRange(body, chain, db, peerId, peerClient);
+      return onBeaconBlocksByRange(body, peerId, peerClient, config);
     },
     [ReqRespMethod.BeaconBlocksByRoot]: (req) => {
-      const fork = chain.config.getForkName(chain.clock.currentSlot);
-      const body = BeaconBlocksByRootRequestType(fork, chain.config).deserialize(req.data);
-      return onBeaconBlocksByRoot(body, chain);
+      const fork = config.getForkName(0);
+      const body = BeaconBlocksByRootRequestType(fork, config).deserialize(req.data);
+      return onBeaconBlocksByRoot(body);
     },
     [ReqRespMethod.BlobSidecarsByRoot]: (req) => {
-      const fork = chain.config.getForkName(chain.clock.currentSlot);
-      const body = BlobSidecarsByRootRequestType(fork, chain.config).deserialize(req.data);
-      return onBlobSidecarsByRoot(body, chain);
+      const fork = config.getForkName(0);
+      const body = BlobSidecarsByRootRequestType(fork, config).deserialize(req.data);
+      return onBlobSidecarsByRoot(body);
     },
     [ReqRespMethod.BlobSidecarsByRange]: (req) => {
       const body = ssz.deneb.BlobSidecarsByRangeRequest.deserialize(req.data);
-      return onBlobSidecarsByRange(body, chain, db);
+      return onBlobSidecarsByRange(body, config);
     },
     [ReqRespMethod.DataColumnSidecarsByRange]: (req, peerId, peerClient) => {
       const body = ssz.fulu.DataColumnSidecarsByRangeRequest.deserialize(req.data);
-      return onDataColumnSidecarsByRange(body, chain, db, peerId, peerClient);
+      return onDataColumnSidecarsByRange(body, peerId, peerClient, config);
     },
     [ReqRespMethod.DataColumnSidecarsByRoot]: (req, peerId, peerClient) => {
-      const body = DataColumnSidecarsByRootRequestType(chain.config).deserialize(req.data);
-      return onDataColumnSidecarsByRoot(body, chain, db, peerId, peerClient);
+      const body = DataColumnSidecarsByRootRequestType(config).deserialize(req.data);
+      return onDataColumnSidecarsByRoot(body, peerId, peerClient);
     },
-
     [ReqRespMethod.LightClientBootstrap]: (req) => {
       const body = ssz.Root.deserialize(req.data);
-      return onLightClientBootstrap(body, chain);
+      return onLightClientBootstrap(body);
     },
     [ReqRespMethod.LightClientUpdatesByRange]: (req) => {
       const body = ssz.altair.LightClientUpdatesByRange.deserialize(req.data);
-      return onLightClientUpdatesByRange(body, chain);
+      return onLightClientUpdatesByRange(body);
     },
-    [ReqRespMethod.LightClientFinalityUpdate]: () => onLightClientFinalityUpdate(chain),
-    [ReqRespMethod.LightClientOptimisticUpdate]: () => onLightClientOptimisticUpdate(chain),
+    [ReqRespMethod.LightClientFinalityUpdate]: () => onLightClientFinalityUpdate(),
+    [ReqRespMethod.LightClientOptimisticUpdate]: () => onLightClientOptimisticUpdate(),
   };
 
   return (method) => handlers[method];
