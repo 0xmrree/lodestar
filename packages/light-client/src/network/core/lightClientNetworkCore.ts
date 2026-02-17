@@ -8,30 +8,41 @@ import type {LoggerNode} from "@lodestar/logger/node";
 import {isForkPostFulu} from "@lodestar/params";
 import {ResponseIncoming} from "@lodestar/reqresp";
 import {Epoch, Status, fulu, sszTypesFor} from "@lodestar/types";
-import {formatNodePeer} from "../../api/impl/node/utils.js";
-import {ClockEvent, IClock} from "../../util/clock.js";
-import {CustodyConfig} from "../../util/dataColumns.js";
-import {PeerIdStr, peerIdFromString} from "../../util/peerId.js";
-import {Discv5Worker} from "../discv5/index.js";
-import {NetworkEventBus} from "../events.js";
-import {FORK_EPOCH_LOOKAHEAD, getActiveForkBoundaries} from "../forks.js";
-import {Eth2Gossipsub, getCoreTopicsAtFork} from "../gossip/index.js";
-import {Libp2p} from "../interface.js";
-import {createNodeJsLibp2p} from "../libp2p/index.js";
-import {MetadataController} from "../metadata.js";
-import {NetworkConfig} from "../networkConfig.js";
-import {NetworkOptions} from "../options.js";
-import {PeerAction, PeerRpcScoreStore, PeerScoreStats} from "../peers/index.js";
-import {PeerManager} from "../peers/peerManager.js";
-import {PeersData} from "../peers/peersData.js";
-import {ReqRespBeaconNode} from "../reqresp/ReqRespBeaconNode.js";
-import {GetReqRespHandlerFn, OutgoingRequestArgs} from "../reqresp/types.js";
-import {LocalStatusCache} from "../statusCache.js";
-import {computeNodeId} from "../subnets/interface.js";
+import {
+  CustodyConfig,
+  ClockEvent,
+  IClock,
+  peerIdFromString,
+} from "@lodestar/beacon-node/util";
+import {
+  Discv5Worker,
+  Eth2Gossipsub,
+  FORK_EPOCH_LOOKAHEAD,
+  GetReqRespHandlerFn,
+  Libp2p,
+  LocalStatusCache,
+  MetadataController,
+  MultiaddrStr,
+  NetworkConfig,
+  NetworkEventBus,
+  NetworkOptions,
+  OutgoingRequestArgs,
+  PeerAction,
+  PeerIdStr,
+  PeerManager,
+  PeerRpcScoreStore,
+  PeerScoreStats,
+  PeersData,
+  ReqRespBeaconNode,
+  computeNodeId,
+  createNodeJsLibp2p,
+  formatNodePeer,
+  getActiveForkBoundaries,
+  getConnectionsMap,
+  getCoreTopicsAtFork,
+} from "@lodestar/beacon-node/network";
 import {noopAttnetsService} from "../subnets/noopAttnetsService.js";
 import {noopSyncnetsService} from "../subnets/noopSyncnetsService.js";
-import {getConnectionsMap} from "../util.js";
-import {MultiaddrStr} from "./types.js";
 
 type Mods = {
   libp2p: Libp2p;
@@ -353,7 +364,7 @@ export class LightClientNetworkCore {
 
   async dumpDiscv5KadValues(): Promise<string[]> {
     // biome-ignore lint/complexity/useLiteralKeys: `discovery` is a private attribute
-    return (await this.peerManager["discovery"]?.discv5?.kadValues())?.map((enr) => enr.encodeTxt()) ?? [];
+    return (await this.peerManager["discovery"]?.discv5?.kadValues())?.map((enr: {encodeTxt(): string}) => enr.encodeTxt()) ?? [];
   }
 
   async dumpMeshPeers(): Promise<Record<string, string[]>> {
@@ -372,6 +383,14 @@ export class LightClientNetworkCore {
   writeDiscv5HeapSnapshot(prefix: string, dirpath: string): Promise<string> {
     // biome-ignore lint/complexity/useLiteralKeys: `discovery` is a private attribute
     return this.peerManager["discovery"]?.discv5.writeHeapSnapshot(prefix, dirpath) ?? Promise.resolve("no discv5");
+  }
+
+  async writeNetworkThreadProfile(_durationMs: number, _dirpath: string): Promise<string> {
+    throw new Error("Method not implemented, please configure network thread");
+  }
+
+  writeNetworkHeapSnapshot(_prefix: string, _dirpath: string): Promise<string> {
+    throw new Error("Method not implemented, please configure network thread");
   }
 
   /**

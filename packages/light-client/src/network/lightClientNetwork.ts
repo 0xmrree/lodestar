@@ -19,7 +19,6 @@ import {
   GossipHandlers,
   GossipType,
   GetReqRespHandlerFn,
-  INetworkCore,
   INetworkEventBus,
   NetworkEvent,
   NetworkEventBus,
@@ -50,7 +49,7 @@ type NetworkModules = {
   clock: IClock;
   networkEventBus: NetworkEventBus;
   networkProcessor: NetworkProcessor;
-  core: INetworkCore;
+  core: LightClientNetworkCore;
 };
 
 export type NetworkInitModules = {
@@ -81,7 +80,7 @@ export class LightClientNetwork {
 
   // TODO: fork NetworkProcessor into a LC-specific version
   private readonly networkProcessor: NetworkProcessor;
-  private readonly core: INetworkCore;
+  private readonly core: LightClientNetworkCore;
 
   private subscribedToCoreTopics = false;
   private connectedPeersSyncMeta = new Map<string, Omit<PeerSyncMeta, "peerId">>();
@@ -123,7 +122,6 @@ export class LightClientNetwork {
       clock,
       events,
       getReqRespHandler,
-      metricsRegistry: null,
       initialStatus,
       initialCustodyGroupCount: 0,
       activeValidatorCount: 0,
@@ -133,7 +131,7 @@ export class LightClientNetwork {
     // light_client_optimistic_update and light_client_finality_update gossip topics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const networkProcessor = new NetworkProcessor(
-      {chain: undefined as any, db: undefined as any, config, logger,metrics: undefined as any, events, gossipHandlers, core},
+      {chain: undefined as any, db: undefined as any, config, logger, metrics: undefined as any, events, gossipHandlers, core: core as any} as any,
       opts
     );
 

@@ -1,6 +1,5 @@
 import {ForkBoundary} from "@lodestar/config";
-import {CommitteeSubscription, SubnetsService} from "../subnets/interface.js";
-import {RequestedSubnet} from "../peers/utils/index.js";
+import {CommitteeSubscription, SubnetsService, RequestedSubnet} from "@lodestar/beacon-node/network";
 
 /**
  * No-op sync committee subnet service for the light client.

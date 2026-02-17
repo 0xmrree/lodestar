@@ -1,7 +1,6 @@
 import {ForkBoundary} from "@lodestar/config";
 import {Slot, SubnetID} from "@lodestar/types";
-import {CommitteeSubscription, IAttnetsService} from "../subnets/interface.js";
-import {RequestedSubnet} from "../peers/utils/index.js";
+import {CommitteeSubscription, IAttnetsService, RequestedSubnet} from "@lodestar/beacon-node/network";
 
 /**
  * No-op attestation subnet service for the light client.
