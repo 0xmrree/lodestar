@@ -16,9 +16,9 @@ import {
 
 import {ResponseIncoming} from "@lodestar/reqresp";
 import {
+  GetReqRespHandlerFn,
   GossipHandlers,
   GossipType,
-  GetReqRespHandlerFn,
   INetworkEventBus,
   NetworkEvent,
   NetworkEventBus,
@@ -121,10 +121,10 @@ export class LightClientNetwork {
       logger,
       clock,
       events,
-      getReqRespHandler,
       initialStatus,
       initialCustodyGroupCount: 0,
       activeValidatorCount: 0,
+      getReqRespHandler,
     });
 
     // TODO: fork NetworkProcessor into a LC-specific version that only handles

@@ -55,9 +55,6 @@ import {
   responseSszTypeByMethod,
 } from "@lodestar/beacon-node/network";
 import {callInNextEventLoop} from "@lodestar/beacon-node/util";
-import {getReqRespHandlers} from "./handlers/index.js";
-
-export {getReqRespHandlers};
 export {ReqRespMethod, type RequestTypedContainer};
 
 export interface ReqRespBeaconNodeModules {

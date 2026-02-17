@@ -18,7 +18,6 @@ import {
   Discv5Worker,
   Eth2Gossipsub,
   FORK_EPOCH_LOOKAHEAD,
-  GetReqRespHandlerFn,
   Libp2p,
   LocalStatusCache,
   MetadataController,
@@ -33,21 +32,22 @@ import {
   PeerRpcScoreStore,
   PeerScoreStats,
   PeersData,
-  ReqRespBeaconNode,
   computeNodeId,
   createNodeJsLibp2p,
   formatNodePeer,
   getActiveForkBoundaries,
   getConnectionsMap,
   getCoreTopicsAtFork,
+  GetReqRespHandlerFn,
 } from "@lodestar/beacon-node/network";
+import {ReqRespLightClient} from "../reqresp/ReqRespLightClient.js";
 import {noopAttnetsService} from "../subnets/noopAttnetsService.js";
 import {noopSyncnetsService} from "../subnets/noopSyncnetsService.js";
 
 type Mods = {
   libp2p: Libp2p;
   gossip: Eth2Gossipsub;
-  reqResp: ReqRespBeaconNode;
+  reqResp: ReqRespLightClient;
   peerManager: PeerManager;
   networkConfig: NetworkConfig;
   peersData: PeersData;
@@ -67,10 +67,10 @@ export type BaseNetworkInit = {
   logger: LoggerNode;
   clock: IClock;
   events: NetworkEventBus;
-  getReqRespHandler: GetReqRespHandlerFn;
   activeValidatorCount: number;
   initialStatus: Status;
   initialCustodyGroupCount: number;
+  getReqRespHandler: GetReqRespHandlerFn;
 };
 
 /**
@@ -95,7 +95,7 @@ export class LightClientNetworkCore {
   private readonly peerManager: PeerManager;
   private readonly networkConfig: NetworkConfig;
   private readonly peersData: PeersData;
-  private readonly reqResp: ReqRespBeaconNode;
+  private readonly reqResp: ReqRespLightClient;
   private readonly gossip: Eth2Gossipsub;
   // TODO: Review if here is best place, and best architecture
   private readonly metadata: MetadataController;
@@ -134,10 +134,10 @@ export class LightClientNetworkCore {
     logger,
     events,
     clock,
-    getReqRespHandler,
     activeValidatorCount,
     initialStatus,
     initialCustodyGroupCount,
+    getReqRespHandler,
   }: BaseNetworkInit): Promise<LightClientNetworkCore> {
     const libp2p = await createNodeJsLibp2p(privateKey, opts, {
       peerStoreDir,
@@ -164,7 +164,7 @@ export class LightClientNetworkCore {
     };
     const metadata = new MetadataController({}, {networkConfig, logger, onSetValue: onMetadataSetValue});
 
-    const reqResp = null as any /* TODO make LC fork of this new ReqRespBeaconNode(
+    const reqResp = new ReqRespLightClient(
       {
         config,
         libp2p,
@@ -178,7 +178,7 @@ export class LightClientNetworkCore {
         getHandler: getReqRespHandler,
       },
       opts
-    );*/
+    );
 
     const gossip = new Eth2Gossipsub(opts, {
       networkConfig,

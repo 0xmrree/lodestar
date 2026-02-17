@@ -26,7 +26,7 @@ function notImplemented(method: ReqRespMethod): ProtocolHandler {
   };
 }
 
-export function getReqRespHandlers(config: BeaconConfig): GetReqRespHandlerFn {
+export function getLightClientReqRespHandlers(config: BeaconConfig): GetReqRespHandlerFn {
   const handlers: Record<ReqRespMethod, ProtocolHandler> = {
     [ReqRespMethod.Status]: notImplemented(ReqRespMethod.Status),
     [ReqRespMethod.Goodbye]: notImplemented(ReqRespMethod.Goodbye),
