@@ -7,7 +7,6 @@ import {phase0} from "@lodestar/types";
  * Per the LC spec, light clients should advertise genesis finalized root/epoch/slot
  * to limit the chance peers call us for data we can't serve.
  * - as per https://github.com/ethereum/consensus-specs/blob/master/specs/altair/light-client/p2p-interface.md?plain=1#L340
- * TODO: source forkDigest and genesisValidatorsRoot from network config.yaml instead of hardcoding
  */
 export function getGenesisStatus(config: BeaconConfig): phase0.Status {
   const phase0Boundary = config.getForkBoundaryAtEpoch(0);

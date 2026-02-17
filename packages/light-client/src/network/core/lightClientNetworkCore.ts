@@ -2,23 +2,20 @@ import {Connection, PrivateKey} from "@libp2p/interface";
 import {peerIdFromPrivateKey} from "@libp2p/peer-id";
 import {multiaddr} from "@multiformats/multiaddr";
 import {PeerScoreStatsDump} from "@chainsafe/libp2p-gossipsub/score";
-import {PublishOpts} from "@chainsafe/libp2p-gossipsub/types";
 import {routes} from "@lodestar/api";
 import {BeaconConfig, ForkBoundary} from "@lodestar/config";
 import type {LoggerNode} from "@lodestar/logger/node";
 import {isForkPostFulu} from "@lodestar/params";
 import {ResponseIncoming} from "@lodestar/reqresp";
-import {Epoch, Status, fulu, sszTypesFor} from "@lodestar/types";
+import {Epoch, Slot, Status, SubnetID, fulu, sszTypesFor} from "@lodestar/types";
 import {formatNodePeer} from "../../api/impl/node/utils.js";
-import {RegistryMetricCreator} from "../../metrics/index.js";
 import {ClockEvent, IClock} from "../../util/clock.js";
 import {CustodyConfig} from "../../util/dataColumns.js";
-import {PeerIdStr, peerIdFromString, peerIdToString} from "../../util/peerId.js";
+import {PeerIdStr, peerIdFromString} from "../../util/peerId.js";
 import {Discv5Worker} from "../discv5/index.js";
 import {NetworkEventBus} from "../events.js";
 import {FORK_EPOCH_LOOKAHEAD, getActiveForkBoundaries} from "../forks.js";
 import {Eth2Gossipsub, getCoreTopicsAtFork} from "../gossip/index.js";
-import {getDataColumnSidecarTopics} from "../gossip/topic.js";
 import {Libp2p} from "../interface.js";
 import {createNodeJsLibp2p} from "../libp2p/index.js";
 import {MetadataController} from "../metadata.js";
@@ -30,19 +27,15 @@ import {PeersData} from "../peers/peersData.js";
 import {ReqRespBeaconNode} from "../reqresp/ReqRespBeaconNode.js";
 import {GetReqRespHandlerFn, OutgoingRequestArgs} from "../reqresp/types.js";
 import {LocalStatusCache} from "../statusCache.js";
-import {AttnetsService} from "../subnets/attnetsService.js";
-import {CommitteeSubscription, IAttnetsService, computeNodeId} from "../subnets/interface.js";
-import {SyncnetsService} from "../subnets/syncnetsService.js";
+import {CommitteeSubscription, IAttnetsService, SubnetsService, computeNodeId} from "../subnets/interface.js";
+import {RequestedSubnet} from "../peers/utils/index.js";
 import {getConnectionsMap} from "../util.js";
-import {NetworkCoreMetrics, createNetworkCoreMetrics} from "./metrics.js";
-import {INetworkCore, MultiaddrStr} from "./types.js";
+import {MultiaddrStr} from "./types.js";
 
 type Mods = {
   libp2p: Libp2p;
   gossip: Eth2Gossipsub;
   reqResp: ReqRespBeaconNode;
-  attnetsService: IAttnetsService;
-  syncnetsService: SyncnetsService;
   peerManager: PeerManager;
   networkConfig: NetworkConfig;
   peersData: PeersData;
@@ -51,7 +44,6 @@ type Mods = {
   config: BeaconConfig;
   clock: IClock;
   statusCache: LocalStatusCache;
-  metrics: NetworkCoreMetrics | null;
   opts: NetworkOptions;
 };
 
@@ -61,7 +53,6 @@ export type BaseNetworkInit = {
   privateKey: PrivateKey;
   peerStoreDir: string | undefined;
   logger: LoggerNode;
-  metricsRegistry: RegistryMetricCreator | null;
   clock: IClock;
   events: NetworkEventBus;
   getReqRespHandler: GetReqRespHandlerFn;
@@ -86,11 +77,9 @@ export type BaseNetworkInit = {
  * - PeerManager
  * - NetworkProcessor: Must be in the main thread, depends on chain
  */
-export class LightClientNetworkCore implements INetworkCore {
+export class LightClientNetworkCore {
   // Internal modules
   private readonly libp2p: Libp2p;
-  private readonly attnetsService: IAttnetsService;
-  private readonly syncnetsService: SyncnetsService;
   private readonly peerManager: PeerManager;
   private readonly networkConfig: NetworkConfig;
   private readonly peersData: PeersData;
@@ -102,7 +91,6 @@ export class LightClientNetworkCore implements INetworkCore {
   private readonly config: BeaconConfig;
   private readonly clock: IClock;
   private readonly statusCache: LocalStatusCache;
-  private readonly metrics: NetworkCoreMetrics | null;
   private readonly opts: NetworkOptions;
 
   // Internal state
@@ -113,8 +101,6 @@ export class LightClientNetworkCore implements INetworkCore {
     this.libp2p = modules.libp2p;
     this.gossip = modules.gossip;
     this.reqResp = modules.reqResp;
-    this.attnetsService = modules.attnetsService;
-    this.syncnetsService = modules.syncnetsService;
     this.peerManager = modules.peerManager;
     this.networkConfig = modules.networkConfig;
     this.peersData = modules.peersData;
@@ -123,7 +109,6 @@ export class LightClientNetworkCore implements INetworkCore {
     this.config = modules.config;
     this.clock = modules.clock;
     this.statusCache = modules.statusCache;
-    this.metrics = modules.metrics;
     this.opts = modules.opts;
 
     this.clock.on(ClockEvent.epoch, this.onEpoch);
@@ -135,7 +120,6 @@ export class LightClientNetworkCore implements INetworkCore {
     privateKey,
     peerStoreDir,
     logger,
-    metricsRegistry,
     events,
     clock,
     getReqRespHandler,
@@ -145,20 +129,19 @@ export class LightClientNetworkCore implements INetworkCore {
   }: BaseNetworkInit): Promise<LightClientNetworkCore> {
     const libp2p = await createNodeJsLibp2p(privateKey, opts, {
       peerStoreDir,
-      metrics: Boolean(metricsRegistry),
-      metricsRegistry: metricsRegistry ?? undefined,
+      metrics: false,
+      metricsRegistry: undefined,
     });
 
-    const metrics = metricsRegistry ? createNetworkCoreMetrics(metricsRegistry) : null;
     const peersData = new PeersData();
-    const peerRpcScores = new PeerRpcScoreStore(opts, metrics, logger);
+    const peerRpcScores = new PeerRpcScoreStore(opts, null, logger);
     const statusCache = new LocalStatusCache(initialStatus);
 
     // Bind discv5's ENR to local metadata
     // resolve circular dependency by setting `discv5` variable after the peer manager is instantiated
     let discv5: Discv5Worker | undefined;
     const onMetadataSetValue = function onMetadataSetValue(key: string, value: Uint8Array): void {
-      discv5?.setEnrValue(key, value).catch((e) => logger.error("error on setEnrValue", {key}, e));
+      discv5?.setEnrValue(key, value).catch((e: Error) => logger.error("error on setEnrValue", {key}, e));
     };
     const peerId = peerIdFromPrivateKey(privateKey);
     const nodeId = computeNodeId(peerId);
@@ -169,7 +152,7 @@ export class LightClientNetworkCore implements INetworkCore {
     };
     const metadata = new MetadataController({}, {networkConfig, logger, onSetValue: onMetadataSetValue});
 
-    const reqResp = new ReqRespBeaconNode(
+    const reqResp = null as any /* TODO make LC fork of this new ReqRespBeaconNode(
       {
         config,
         libp2p,
@@ -177,19 +160,19 @@ export class LightClientNetworkCore implements INetworkCore {
         peerRpcScores,
         logger,
         events,
-        metrics,
+        metrics: null,
         peersData,
         statusCache,
         getHandler: getReqRespHandler,
       },
       opts
-    );
+    );*/
 
     const gossip = new Eth2Gossipsub(opts, {
       networkConfig,
       libp2p,
       logger,
-      metricsRegister: metricsRegistry,
+      metricsRegister: null,
       eth2Context: {
         activeValidatorCount,
         currentSlot: clock.currentSlot,
@@ -203,20 +186,28 @@ export class LightClientNetworkCore implements INetworkCore {
     await libp2p.start();
 
     await reqResp.start();
-    // should be called before AttnetsService constructor so that node subscribe to deterministic attnet topics
     await gossip.start();
 
-    const attnetsService = new AttnetsService(
-      config,
-      clock,
-      gossip,
-      metadata,
-      logger,
-      metrics,
-      networkConfig.nodeId,
-      opts
-    );
-    const syncnetsService = new SyncnetsService(config, clock, gossip, metadata, logger, metrics, opts);
+    // PeerManager requires attnetsService and syncnetsService — pass no-op stubs since
+    // the LC has no validator duties and never subscribes to attestation/sync subnets.
+    // getActiveSubnets() returning [] is safe: prioritizePeers() gates both attnet and syncnet
+    // subnet-seeking logic on `activeAttnets.length > 0` / `activeSyncnets.length > 0`
+    // (see prioritizePeers.ts:241, 267), so empty arrays simply skip all subnet peer queries.
+    const noopAttnetsService: IAttnetsService = {
+      close: () => {},
+      addCommitteeSubscriptions: (_subscriptions: CommitteeSubscription[]) => {},
+      getActiveSubnets: (): RequestedSubnet[] => [],
+      subscribeSubnetsNextBoundary: (_boundary: ForkBoundary) => {},
+      unsubscribeSubnetsPrevBoundary: (_boundary: ForkBoundary) => {},
+      shouldProcess: (_subnet: SubnetID, _slot: Slot) => false,
+    };
+    const noopSyncnetsService: SubnetsService = {
+      close: () => {},
+      addCommitteeSubscriptions: (_subscriptions: CommitteeSubscription[]) => {},
+      getActiveSubnets: (): RequestedSubnet[] => [],
+      subscribeSubnetsNextBoundary: (_boundary: ForkBoundary) => {},
+      unsubscribeSubnetsPrevBoundary: (_boundary: ForkBoundary) => {},
+    };
 
     const peerManager = await PeerManager.init(
       {
@@ -224,10 +215,10 @@ export class LightClientNetworkCore implements INetworkCore {
         libp2p,
         gossip,
         reqResp,
-        attnetsService,
-        syncnetsService,
+        attnetsService: noopAttnetsService,
+        syncnetsService: noopSyncnetsService,
         logger,
-        metrics,
+        metrics: null,
         clock,
         peerRpcScores,
         events,
@@ -255,8 +246,6 @@ export class LightClientNetworkCore implements INetworkCore {
       libp2p,
       reqResp,
       gossip,
-      attnetsService,
-      syncnetsService,
       peerManager,
       networkConfig,
       peersData,
@@ -265,7 +254,6 @@ export class LightClientNetworkCore implements INetworkCore {
       config,
       clock,
       statusCache,
-      metrics,
       opts,
     });
   }
@@ -286,12 +274,14 @@ export class LightClientNetworkCore implements INetworkCore {
     await this.reqResp.stop();
     await this.reqResp.unregisterAllProtocols();
     this.logger.debug("network reqResp closed");
-    this.attnetsService.close();
-    this.syncnetsService.close();
     await this.libp2p.stop();
     this.logger.debug("network lib2p closed");
 
     this.closed = true;
+  }
+
+  async isSubscribedToGossipCoreTopics(): Promise<boolean> {
+    return this.forkBoundariesByEpoch.size > 0;
   }
 
   getNetworkConfig(): NetworkConfig {
@@ -394,17 +384,9 @@ export class LightClientNetworkCore implements INetworkCore {
     return meshPeers;
   }
 
-  async writeNetworkThreadProfile(): Promise<string> {
-    throw new Error("Method not implemented, please configure network thread");
-  }
-
   async writeDiscv5Profile(durationMs: number, dirpath: string): Promise<string> {
     // biome-ignore lint/complexity/useLiteralKeys: `discovery` is a private attribute
     return this.peerManager["discovery"]?.discv5.writeProfile(durationMs, dirpath) ?? "no discv5";
-  }
-
-  writeNetworkHeapSnapshot(): Promise<string> {
-    throw new Error("Method not implemented, please configure network thread");
   }
 
   writeDiscv5HeapSnapshot(prefix: string, dirpath: string): Promise<string> {
@@ -435,8 +417,6 @@ export class LightClientNetworkCore implements INetworkCore {
             } else {
               this.logger.info("Skipping subscribing gossip topics for next fork boundary", nextBoundary);
             }
-            this.attnetsService.subscribeSubnetsNextBoundary(nextBoundary);
-            this.syncnetsService.subscribeSubnetsNextBoundary(nextBoundary);
           }
 
           // On fork boundary transition
@@ -454,8 +434,6 @@ export class LightClientNetworkCore implements INetworkCore {
           if (epoch === nextBoundaryEpoch + FORK_EPOCH_LOOKAHEAD) {
             this.logger.info("Unsubscribing gossip topics of previous fork boundary", prevBoundary);
             this.unsubscribeCoreTopicsAtBoundary(this.networkConfig, prevBoundary);
-            this.attnetsService.unsubscribeSubnetsPrevBoundary(prevBoundary);
-            this.syncnetsService.unsubscribeSubnetsPrevBoundary(prevBoundary);
           }
         }
       }

@@ -66,12 +66,7 @@ export type NetworkInitModules = {
 };
 
 /**
- * Must support running both on worker and on main thread.
- *
  * Exists a front class that's what consumers interact with.
- * This class will multiplex between:
- * - libp2p in worker
- * - libp2p in main thread
  */
 export class LightClientNetwork {
   readonly peerId: PeerId;

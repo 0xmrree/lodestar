@@ -11,6 +11,10 @@ import type {LightClientP2PConfig} from "../lightClientOptions.js";
 import type {LightClientTransport} from "./interface.js";
 
 export class LightClientP2PTransport implements LightClientTransport {
+  // TODO: Replace LightClientP2PConfig with NetworkOptions from @lodestar/beacon-node/network.
+  // LightClientP2PConfig only has discv5/multiaddr/version — it needs to be converted to a full
+  // NetworkOptions (with peer counts, gossipsub settings, reqresp settings, etc.) before being
+  // passed into LightClientNetwork.init(). At that point, lightClientOptions.ts can be removed.
   constructor(
     private readonly privateKey: PrivateKey,
     private readonly options: LightClientP2PConfig
